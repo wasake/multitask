@@ -21,6 +21,7 @@
 *.data
 *.json
 *.cfg
+*.md5
 
 runs/*
 !data/hyps/*

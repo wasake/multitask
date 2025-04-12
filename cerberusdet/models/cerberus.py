@@ -559,7 +559,7 @@ class CerberusDet(nn.Module):
             branches: List[int],
             device: Optional[torch.device] = None,
             inds_to_map_per_head: Optional[Dict[int, List[int]]] = None,
-            next_ids_map: Optional[Dict[int, Dict[int, int]]] = None,
+            next_ids_map: Optional[Dict[int, Dict[int, int]]] = None
     ):
         """
         动态克隆指定索引的模块的子模块，并根据提供的 `branches` 列表堆叠克隆的子模块，
@@ -942,9 +942,13 @@ class CerberusDet(nn.Module):
           一个字典，键为任务ID，值为任务的输出
         """
         if task_ids is None and hasattr(self, "cur_task"):
+
             # 如果没有指定task_ids且当前任务已定义，则使用当前任务
-            print(f"WARN: forcely inference for {self.cur_task} task")
+            # 在epoch开始的前三次必定触发，不适合
+            # print(f"WARN: forcely inference for {self.cur_task} task")
             task_ids = self.cur_task
+
+            
         elif task_ids is None:
             # 如果没有指定task_ids，则默认执行所有头任务
             task_ids = list(self.heads.keys())

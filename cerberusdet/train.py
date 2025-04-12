@@ -308,7 +308,7 @@ def parse_opt(known=False):
     parser.add_argument("--batch-size", type=str, default='8',
                         help="batch size for one GPUs")  # 每个GPU的批次大小，默认是32
 
-    parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=160,
+    parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640,
                         help="train, val image size (pixels)")  # 训练和验证的图像大小，默认是640像素
 
     parser.add_argument("--resume", nargs="?", const=True, default=False,
@@ -384,7 +384,8 @@ def parse_opt(known=False):
                         help="Freeze shared between all tasks params for first N epochs")  # 冻结共享参数，直到训练的第N个周期，默认为0
 
     parser.add_argument("--skip-batches", action="store_true",
-                        help="skip batches of small datasets so that the model sees them only once per epoch.")  # 是否跳过小数据集的批次，每个周期只看到一次
+                        help="skip batches of small datasets so that the model sees them only once per epoch.")  
+    # 是否跳过小数据集的批次，每个周期只看到一次epoch
 
     # 解析参数，`parse_known_args()`允许解析未知参数
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
@@ -493,12 +494,14 @@ def main(opt):
         evolver.run_evolution(train)  # 启动超参数演化过程，传入训练函数
 
 
-def run(**kwargs):
+def run(kwargs):
     # Usage: from cerberusdet import train; train.run(imgsz=640, weights='yolov5m.pt')
     opt = parse_opt(True)
     for k, v in kwargs.items():
         setattr(opt, k, v)
     main(opt)
+    new_pt_path = opt.save_dir + "/weights/best.pt"
+    return new_pt_path
 
 
 if __name__ == "__main__":
