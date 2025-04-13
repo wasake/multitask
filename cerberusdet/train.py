@@ -493,6 +493,12 @@ def main(opt):
         # 执行超参数演化
         evolver.run_evolution(train)  # 启动超参数演化过程，传入训练函数
 
+    # mlruns占用大量内存，暂时不用这部分，将其删除 
+    import shutil
+    if os.path.exists("mlruns"):
+        shutil.rmtree("mlruns")
+        logger.info("已删除 mlruns 目录")
+
 
 def run(kwargs):
     # Usage: from cerberusdet import train; train.run(imgsz=640, weights='yolov5m.pt')

@@ -95,22 +95,28 @@ class YOLOManager:
                 "blocks.0.model.1.",
                 "blocks.0.model.2.",
                 "blocks.0.model.3.",
-                "blocks.0.model.4."
-            ],
-            "neck": [
+                "blocks.0.model.4.",
                 "blocks.0.model.5.",
                 "blocks.0.model.6.",
                 "blocks.0.model.7.",
                 "blocks.0.model.8.",
-                "blocks.3.",
-                "blocks.6.",
-                "blocks.7."
+                "blocks.0.model.9."
             ],
-            "head": [
-                "blocks.0.model.9.",
+            "neck": [
+                "blocks.1.",
+                "blocks.2.",
+                "blocks.3.",
+                "blocks.4.",
+                "blocks.5.",
+                "blocks.6.",
+                "blocks.7.",
+                "blocks.8.",
                 "blocks.9.",
                 "blocks.10.",
-                "blocks.12.",
+                "blocks.11.",
+                "blocks.12."
+            ],
+            "head": [
                 "blocks.13."
             ]
         }
@@ -144,22 +150,28 @@ class YOLOManager:
                 "blocks.0.model.1.",
                 "blocks.0.model.2.",
                 "blocks.0.model.3.",
-                "blocks.0.model.4."
-            ],
-            "neck": [
+                "blocks.0.model.4.",
                 "blocks.0.model.5.",
                 "blocks.0.model.6.",
                 "blocks.0.model.7.",
                 "blocks.0.model.8.",
-                "blocks.3.",
-                "blocks.6.",
-                "blocks.7."
+                "blocks.0.model.9."
             ],
-            "head": [
-                "blocks.0.model.9.",
+            "neck": [
+                "blocks.1.",
+                "blocks.2.",
+                "blocks.3.",
+                "blocks.4.",
+                "blocks.5.",
+                "blocks.6.",
+                "blocks.7.",
+                "blocks.8.",
                 "blocks.9.",
                 "blocks.10.",
-                "blocks.12.",
+                "blocks.11.",
+                "blocks.12."
+            ],
+            "head": [
                 "blocks.13."
             ]
         }

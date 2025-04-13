@@ -81,7 +81,7 @@ class Client(NetworkEndpoint):
         super().__init__(pt_path, data_yaml, hyp, cfg, device)
         self.server = server
     
-    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "clientruns/train", name: str = "client", exist_ok: bool = False):
+    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "/root/autodl-fs/clientruns/train", name: str = "client", exist_ok: bool = False):
         super().train(epochs, batch_size, imgsz, project, name, exist_ok)
 
     def transmit(self, total_epochs: int = 10, transmit_epochs: int = 1):
@@ -110,7 +110,7 @@ class Client(NetworkEndpoint):
             self.receive_pt(aggregated_pt_path)
 
 class Server(NetworkEndpoint):
-    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "serverruns/train", name: str = "server", exist_ok: bool = False):
+    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "/root/autodl-tmp/serverruns/train", name: str = "server", exist_ok: bool = False):
         super().train(epochs, batch_size, imgsz, project, name, exist_ok)
 
     def aggregate(self, client_pt_path: str):
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # 初始化服务器
     server = Server(
         pt_path="pretrained/yolov8x_state_dict.pt",
-        data_yaml="data/lightweight_dataset.yaml",
+        data_yaml="data/vd1.yaml",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
@@ -179,11 +179,11 @@ if __name__ == "__main__":
     client = Client(
         server=server,
         pt_path="pretrained/yolov8x_state_dict.pt",
-        data_yaml="data/lightweight_dataset.yaml",
+        data_yaml="data/vd1.yaml",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
     
     # 客户端训练并与服务器通信
-    client.transmit(total_epochs=1)
+    client.transmit(total_epochs=100)
