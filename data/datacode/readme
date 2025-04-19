@@ -1,0 +1,4 @@
+使用 trans_images 将文件解压并分离其中的txt文件
+trans_images疑似有bug
+使用 trans 将原来的txt标签文件修改成yolo识别格式
+使用 sort 将原来的标签分类修改
