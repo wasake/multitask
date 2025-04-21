@@ -5,7 +5,7 @@ import shutil
 from cerberusdet.models.yolomanager import YOLOManager  # 假设 yolomanager.py 在此路径
 
 class NetworkEndpoint():
-    def __init__(self, pt_path: str, data_yaml: str, hyp: str, cfg: str, device: str = "cuda"):
+    def __init__(self, pt_path: str, data_yaml: str, hyp: str, cfg: str, device: str = "cuda", project: str = "runs/trains"):
         """
         初始化通讯节点。
         
@@ -19,6 +19,7 @@ class NetworkEndpoint():
         self.data_yaml = data_yaml
         self.hyp = hyp
         self.cfg = cfg
+        self.prg = project
         self.device = device if torch.cuda.is_available() else "cpu"
         self.yolo_manager = YOLOManager(pt_path, device)
 
@@ -41,7 +42,7 @@ class NetworkEndpoint():
             epochs=epochs,
             batch_size=batch_size,
             imgsz=imgsz,
-            project=project,
+            project=self.prg,
             name=name,
             exist_ok=exist_ok
         )
@@ -97,12 +98,13 @@ class FederationManager:
         else:
             server_pt_path = None
 
-        # 聚合所有模型
-        aggregated_pt_path = self.server.aggregate(self.client_pt_paths, server_pt_path)
+        # 聚合所有模型并获取更新后的 .pt 文件路径，但在内部已经实现该目标
+        updated_pt_paths = self.server.aggregate(self.client_pt_paths, server_pt_path)
 
-        # 分发聚合后的模型给所有客户端
-        for client in self.clients:
-            client.receive_pt(aggregated_pt_path)
+        # 分发聚合后的模型给对应的客户端
+        # for i in range(len(self.clients)):
+        #     self.clients[i].receive_pt(updated_pt_paths[i])
+        #     print("检测通过")
 
 class Server(NetworkEndpoint):
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
@@ -139,28 +141,23 @@ class Server(NetworkEndpoint):
         for key in all_backbones[0].keys():
             averaged_backbone[key] = sum([backbone[key] for backbone in all_backbones]) / len(all_backbones)
 
-        # 更新服务器模型的 backbone 参数
-        self.yolo_manager.update_parameters(averaged_backbone, part="backbone")
+        for pt_path in client_pt_paths:
+            # 临时更改 yolo_manager 的 pt_path 以加载客户端模型
+            original_pt_path = self.yolo_manager.pt_path
+            self.yolo_manager.pt_path = pt_path
 
-        # 保存聚合后的模型
-        aggregated_pt_path = os.path.join(os.path.dirname(self.pt_path), "aggregated_model.pt")
-        self.yolo_manager.save_model(aggregated_pt_path)
-        return aggregated_pt_path
+            # 更新 backbone 参数
+            self.yolo_manager.update_parameters(averaged_backbone, part="backbone")
+
+            # 恢复原始 pt_path
+            self.yolo_manager.pt_path = original_pt_path
+
+        if server_pt_path:
+            self.yolo_manager.update_parameters(averaged_backbone, part="backbone")
+        
+        return client_pt_paths
 
 class Client(NetworkEndpoint):
-    def __init__(self, pt_path: str, data_yaml: str, hyp: str, cfg: str, device: str = "cuda"):
-        """
-        初始化客户端（移除对服务器的直接依赖）。
-
-        参数:
-            pt_path (str): 初始模型的 .pt 文件路径
-            data_yaml (str): 数据集配置文件路径
-            hyp (str): 超参数文件路径
-            cfg (str): 模型配置文件路径
-            device (str): 运行设备，默认为 "cuda"
-        """
-        super().__init__(pt_path, data_yaml, hyp, cfg, device)
-
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
               project: str = "/root/autodl-fs/clientruns/train", name: str = "client", 
               exist_ok: bool = False):
@@ -184,17 +181,16 @@ if __name__=="__main__":
         pt_path="pretrained/yolov8x_state_dict.pt",
         data_yaml="data/vd1.yaml",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
-        project="/root/autodl-tmp/serverruns/train",
+        project="/root/autodl-fs/serverruns/train",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
     
     # 初始化客户端
     client1 = Client(
-        server=server,
         pt_path="pretrained/yolov8x_state_dict.pt",
-        data_yaml="data/vd1.yaml",
-        project="/root/autodl-tmp/client1runs/train",
+        data_yaml="data/UAV0.yaml",
+        project="/root/autodl-fs/client1runswithserver/train",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
@@ -202,10 +198,9 @@ if __name__=="__main__":
 
     # 初始化客户端
     client2 = Client(
-        server=server,
         pt_path="pretrained/yolov8x_state_dict.pt",
-        data_yaml="data/vd1.yaml",
-        project="/root/autodl-tmp/client2runs/train",
+        data_yaml="data/UAV1.yaml",
+        project="/root/autodl-fs/client2runswithserver/train",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
@@ -213,10 +208,9 @@ if __name__=="__main__":
 
     # 初始化客户端
     client3 = Client(
-        server=server,
         pt_path="pretrained/yolov8x_state_dict.pt",
-        data_yaml="data/vd1.yaml",
-        project="/root/autodl-tmp/client3runs/train",
+        data_yaml="data/UAV2.yaml",
+        project="/root/autodl-fs/client3runswithserver/train",
         hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
         cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
@@ -226,7 +220,7 @@ if __name__=="__main__":
     manager = FederationManager(server, [client1, client2, client3])
 
     # 模拟多轮训练和聚合
-    for round in range(5):  # 进行 5 轮
+    for round in range(50):  # 进行 5 轮
         print(f"Round {round + 1}")
         # 清空上一轮的模型路径
         manager.client_pt_paths = []
@@ -235,6 +229,19 @@ if __name__=="__main__":
         for client in manager.clients:
             client.train_and_send(manager, epochs=1)
 
+
         # 服务器聚合并分发
-        manager.aggregate_and_distribute(server_trains=True)  # 服务器参与训练
-        # 或者使用 manager.aggregate_and_distribute(server_trains=False)  # 服务器不训练 
+        # manager.aggregate_and_distribute(server_trains=True)  # 服务器参与训练
+        # 或者使用 
+        manager.aggregate_and_distribute(server_trains=False)  # 服务器不训练 
+
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+
+    # mlruns占用大量内存，暂时不用这部分，将其删除 
+    if os.path.exists("mlruns"):
+        shutil.rmtree("mlruns")
+        print("已删除 mlruns 目录")
