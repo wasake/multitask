@@ -362,7 +362,7 @@ def parse_opt(known=False):
     parser.add_argument("--patience", type=int, default=30,
                         help="EarlyStopping patience (epochs without improvement)")  # 提前停止的耐心值（在没有提升的情况下允许多少个周期）
 
-    parser.add_argument("--mlflow-url", type=str, default='localhost',
+    parser.add_argument("--mlflow-url", type=str, default='None',
                         help="Param for mlflow.set_tracking_uri(), may be 'local'")  # MLFlow的跟踪URI，默认为`None`
 
     parser.add_argument("--local-rank", type=int, default=-1,
@@ -504,6 +504,25 @@ def run(kwargs):
     main(opt)
     new_pt_path = opt.save_dir + "/weights/best.pt"
     return new_pt_path
+
+
+def run_with_optimizer_state(opt):
+    """运行训练并返回优化器状态"""
+    # 转换字典为命名空间对象
+    if isinstance(opt, dict):
+        opt = argparse.Namespace(**opt)
+    
+    # 设置设备
+    device = select_device(opt.device)
+    
+    # 获取优化器状态
+    optimizer_state = opt.optimizer_state if hasattr(opt, 'optimizer_state') else None
+    
+    # 调用训练函数
+    results_per_task, epoch, optimizer_state = train_with_optimizer(opt.hyp, opt, device, optimizer_state=optimizer_state)
+    
+    # 返回模型路径和优化器状态
+    return str(Path(opt.save_dir) / "weights" / "last.pt"), optimizer_state
 
 
 if __name__ == "__main__":

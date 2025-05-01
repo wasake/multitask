@@ -71,6 +71,15 @@ class YOLOManager:
         self.pt_path = new_pt_path  # 更新当前 .pt 文件路径
         print(f"Training completed. Updated model saved to {self.pt_path}")
     
+    def train_with_optimizer_state(self, opt):
+        """训练模型并保存优化器状态"""
+        from cerberusdet.train import run_with_optimizer_state
+        
+        # 调用训练函数，获取模型路径和优化器状态
+        new_pt_path, optimizer_state = run_with_optimizer_state(opt)
+        self.pt_path = new_pt_path
+        return new_pt_path, optimizer_state
+
     def get_parameters(self, part: str = "all", themodel=None) -> dict:
         """
         获取模型参数。

@@ -22,8 +22,10 @@ class NetworkEndpoint():
         self.prg = project
         self.device = device if torch.cuda.is_available() else "cpu"
         self.yolo_manager = YOLOManager(pt_path, device)
+        self.optimizer_state = None  # 添加优化器状态存储
 
-    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "runs/train", name: str = "exp", exist_ok: bool = False):
+    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "runs/train", 
+              name: str = "exp", exist_ok: bool = False, resume_optimizer: bool = False):
         """
         训练模型。
         
@@ -34,19 +36,30 @@ class NetworkEndpoint():
             project (str): 保存目录
             name (str): 实验名称
             exist_ok (bool): 是否覆盖现有目录
+            resume_optimizer (bool): 是否恢复优化器状态
         """
-        self.yolo_manager.train(
-            data_yaml=self.data_yaml,
-            hyp=self.hyp,
-            cfg=self.cfg,
-            epochs=epochs,
-            batch_size=batch_size,
-            imgsz=imgsz,
-            project=self.prg,
-            name=name,
-            exist_ok=exist_ok
-        )
-        self.pt_path = self.yolo_manager.pt_path  # 更新 .pt 文件路径
+        # 准备训练参数
+        opt = {
+            'weights': self.pt_path,
+            'data': self.data_yaml,
+            'hyp': self.hyp,
+            'cfg': self.cfg,
+            'epochs': epochs,
+            'batch-size': batch_size,
+            'imgsz': imgsz,
+            'resume': False,
+            'project': self.prg,
+            'name': name,
+            'exist-ok': exist_ok,
+            'device': self.device,
+            'optimizer_state': self.optimizer_state if resume_optimizer else None
+        }
+        
+        # 调用修改后的训练函数
+        from cerberusdet.train import run_with_optimizer_state
+        new_pt_path, optimizer_state = run_with_optimizer_state(opt)
+        self.pt_path = new_pt_path
+        self.optimizer_state = optimizer_state  # 保存优化器状态
 
     def send_pt(self, dest_path: str):
         """
@@ -109,8 +122,8 @@ class FederationManager:
 class Server(NetworkEndpoint):
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
               project: str = "/root/autodl-tmp/serverruns/train", name: str = "server", 
-              exist_ok: bool = False):
-        super().train(epochs, batch_size, imgsz, project, name, exist_ok)
+              exist_ok: bool = False, resume_optimizer: bool = False):
+        super().train(epochs, batch_size, imgsz, project, name, exist_ok, resume_optimizer)
 
     def aggregate(self, client_pt_paths, server_pt_path=None):
         """
@@ -160,18 +173,21 @@ class Server(NetworkEndpoint):
 class Client(NetworkEndpoint):
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
               project: str = "/root/autodl-fs/clientruns/train", name: str = "client", 
-              exist_ok: bool = False):
-        super().train(epochs, batch_size, imgsz, project, name, exist_ok)
+              exist_ok: bool = False, resume_optimizer: bool = False):
+        super().train(epochs, batch_size, imgsz, project, name, exist_ok, resume_optimizer)
 
-    def train_and_send(self, manager, epochs=1):
+    def train_and_send(self, manager, epochs=1, round_idx=0):
         """
         训练模型并将 .pt 文件路径发送给管理器。
 
         参数:
             manager (FederationManager): 联邦学习管理器
             epochs (int): 训练的 epoch 数
+            round_idx (int): 当前联邦学习轮次
         """
-        self.train(epochs=epochs)
+        # 第一轮不恢复优化器状态，后续轮次恢复
+        resume_optimizer = (round_idx > 0) 
+        self.train(epochs=epochs, resume_optimizer=resume_optimizer)
         manager.client_pt_paths.append(self.pt_path)
 
 if __name__=="__main__":
@@ -220,26 +236,18 @@ if __name__=="__main__":
     manager = FederationManager(server, [client1, client2, client3])
 
     # 模拟多轮训练和聚合
-    for round in range(50):  # 进行 5 轮
+    for round in range(50):
         print(f"Round {round + 1}")
-        # 清空上一轮的模型路径
         manager.client_pt_paths = []
 
-        # 客户端训练并发送模型路径
+        # 客户端训练并发送模型路径（传递当前轮次）
         for client in manager.clients:
-            client.train_and_send(manager, epochs=1)
-
+            client.train_and_send(manager, epochs=1, round_idx=round)
 
         # 服务器聚合并分发
-        # manager.aggregate_and_distribute(server_trains=True)  # 服务器参与训练
-        # 或者使用 
-        manager.aggregate_and_distribute(server_trains=False)  # 服务器不训练 
-
-        print(f"Round {round + 1} clear")
-        print(f"Round {round + 1} clear")
-        print(f"Round {round + 1} clear")
-        print(f"Round {round + 1} clear")
-        print(f"Round {round + 1} clear")
+        manager.aggregate_and_distribute(server_trains=False)
+        
+        print(f"Round {round + 1} completed")
 
     # mlruns占用大量内存，暂时不用这部分，将其删除 
     if os.path.exists("mlruns"):
