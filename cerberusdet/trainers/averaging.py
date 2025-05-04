@@ -106,40 +106,19 @@ class Averaging(BaseTrainer):
         # 从模型管理器中获取数据集类别数
         self.nc = self.model_manager.data_dict["nc"]
 
-    def resume(self, ckpt):
+    def resume(self, ckpt, optimizer_state=None):
         """
         从检查点恢复训练。
 
         参数:
           ckpt: 检查点字典，包含模型状态、优化器状态等信息。
+          optimizer_state: 外部传入的优化器状态，优先级高于ckpt中的优化器状态。
 
         返回:
           start_epoch: 恢复后的起始 epoch（默认为 0）。
         """
-        start_epoch = 0  # 默认从第 0 个 epoch 开始
-
-        if ckpt is None:  # 如果没有提供检查点，直接返回
-            return start_epoch
-
-        # 如果检查点中包含优化器状态，则恢复优化器
-        if ckpt.get("optimizer") is not None:
-            if not isinstance(ckpt["optimizer"], list):
-                ckpt_optimizer = ckpt["optimizer"]
-            else:
-                assert len(ckpt["optimizer"]) == 2
-                ckpt_optimizer = ckpt["optimizer"]
-
-            # 加载优化器状态
-            self.optimizer.load_state_dict(ckpt_optimizer)
-            # 恢复最佳适应度和每个任务的最佳适应度
-            self.best_fitness = ckpt["best_fitness"]
-            self.best_fitness_per_task = ckpt["best_fitness_per_task"]
-            # 更新调度器的最后一个 epoch
-            self.scheduler.last_epoch = start_epoch
-
-        # 从检查点中获取恢复的 epoch
-        start_epoch = ckpt.get("epoch", -1) + 1
-        return start_epoch
+        # 调用父类的resume方法，处理优化器状态和其他训练参数
+        return super().resume(ckpt, optimizer_state)
 
     def get_optimizer_dict(self):
         """
