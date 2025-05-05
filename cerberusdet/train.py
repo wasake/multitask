@@ -44,7 +44,6 @@ def train(
     device,
     train_dataset: Optional[List[LoadImagesAndLabels]] = None,  # 可选的自定义训练数据集
     val_dataset: Optional[List[LoadImagesAndLabels]] = None,  # 可选的自定义验证数据集
-    optimizer_state=None,  # 可选的优化器状态，用于恢复训练
 ):
     """
     训练模型的主函数，返回每个任务的评估结果
@@ -54,7 +53,6 @@ def train(
     :param device: 当前训练设备（CPU或GPU）
     :param train_dataset: 训练数据集（可选），如果提供将使用提供的训练数据
     :param val_dataset: 验证数据集（可选），如果提供将使用提供的验证数据
-    :param optimizer_state: 优化器状态（可选），用于恢复训练
     :return: 每个任务的评估结果，包含精度（P），召回率（R），mAP 等
     """
 
@@ -128,7 +126,7 @@ def train(
     trainer = Averaging(device, model, model_manager, train_loader, val_loader, dataset, imgsz, gs)
 
     # 恢复训练
-    start_epoch = trainer.resume(model_manager.ckpt, optimizer_state)
+    start_epoch = trainer.resume(model_manager.ckpt)
 
     # 数据并行（DP模式）警告
     if cuda and RANK == -1 and torch.cuda.device_count() > 1:
@@ -185,7 +183,7 @@ def train(
     # DDP模式下的处理
     if cuda and RANK != -1:
         logger.info(f"Using DDP on gpu {LOCAL_RANK}")
-        model = DDP(model, device_ids=[LOCAL_RANK], output_device=[LOCAL_RANK], find_unused_parameters=True)
+        model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK, find_unused_parameters=True)
 
     # 填充模型参数（根据数据集任务数量）
     model_manager.fill_tasks_parameters(nl, imgsz, model, trainer.dataset, device)
@@ -280,7 +278,7 @@ def train(
 
     # 清空CUDA缓存
     torch.cuda.empty_cache()
-    return results_per_task, epoch, trainer.optimizer.state_dict()
+    return results_per_task, epoch
 
 
 def parse_opt(known=False):
@@ -307,7 +305,7 @@ def parse_opt(known=False):
 
     parser.add_argument("--epochs", type=int, default=100)  # 训练的周期数，默认是100
 
-    parser.add_argument("--batch-size", type=str, default='1',
+    parser.add_argument("--batch-size", type=str, default='8',
                         help="batch size for one GPUs")  # 每个GPU的批次大小，默认是32
 
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640,
@@ -496,6 +494,8 @@ def main(opt):
         evolver.run_evolution(train)  # 启动超参数演化过程，传入训练函数
 
 
+
+
 def run(kwargs):
     # Usage: from cerberusdet import train; train.run(imgsz=640, weights='yolov5m.pt')
     opt = parse_opt(True)
@@ -504,31 +504,6 @@ def run(kwargs):
     main(opt)
     new_pt_path = opt.save_dir + "/weights/best.pt"
     return new_pt_path
-
-
-def run_with_optimizer_state(kwargs):
-    """
-    与run函数类似，但支持保存和恢复优化器状态，确保训练的连续性。
-
-    参数:
-        kwargs: 包含训练参数的字典，可能包含'optimizer_state'键
-
-    返回:
-        tuple: (保存的模型路径，优化器状态)
-    """
-    opt = parse_opt(True)
-    for k, v in kwargs.items():
-        setattr(opt, k, v)
-    
-    # 检查是否有优化器状态需要恢复
-    optimizer_state = kwargs.get('optimizer_state', None)
-    
-    # 将优化器状态传递给train函数
-    results_per_task, epoch, optimizer_state = train(opt.hyp, opt, select_device(opt.device), 
-                                                     optimizer_state=optimizer_state)
-    
-    new_pt_path = opt.save_dir + "/weights/best.pt"
-    return new_pt_path, optimizer_state
 
 
 if __name__ == "__main__":

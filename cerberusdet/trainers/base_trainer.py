@@ -56,59 +56,9 @@ class BaseTrainer:
         """获取优化器的参数字典"""
         raise NotImplementedError  # 需要子类实现具体的优化器设置
 
-    def resume(self, ckpt, optimizer_state=None):
-        """从checkpoint恢复训练。
-
-        参数:
-          ckpt: 检查点字典，包含模型状态、优化器状态等信息。
-          optimizer_state: 外部传入的优化器状态，优先级高于ckpt中的优化器状态。
-
-        返回:
-          start_epoch: 恢复后的起始 epoch（默认为 0）。
-        """
-        start_epoch = 0  # 默认从第 0 个 epoch 开始
-
-        if ckpt is None and optimizer_state is None:  # 如果没有提供检查点和优化器状态，直接返回
-            return start_epoch
-
-        # 首先检查外部传入的优化器状态
-        if optimizer_state is not None:
-            self.optimizer.load_state_dict(optimizer_state)
-            if LOGGER.level <= 20:  # INFO级别(20)或更低时打印信息
-                LOGGER.info("已恢复外部提供的优化器状态")
-        # 如果没有外部优化器状态，但检查点中包含优化器状态，则从检查点恢复
-        elif ckpt is not None and ckpt.get("optimizer") is not None:
-            if not isinstance(ckpt["optimizer"], list):
-                ckpt_optimizer = ckpt["optimizer"]
-            else:
-                assert len(ckpt["optimizer"]) == 2
-                ckpt_optimizer = ckpt["optimizer"]
-
-            # 加载优化器状态
-            self.optimizer.load_state_dict(ckpt_optimizer)
-            if LOGGER.level <= 20:  # INFO级别或更低时打印信息
-                LOGGER.info("已从检查点恢复优化器状态")
-
-        # 如果有检查点，恢复最佳适应度和每个任务的最佳适应度
-        if ckpt is not None:
-            # 恢复最佳适应度和每个任务的最佳适应度
-            if ckpt.get("best_fitness") is not None:
-                self.best_fitness = ckpt["best_fitness"]
-            if ckpt.get("best_fitness_per_task") is not None:
-                self.best_fitness_per_task = ckpt["best_fitness_per_task"]
-            
-            # 从检查点中获取恢复的 epoch
-            start_epoch = ckpt.get("epoch", -1) + 1
-            
-        # 更新调度器的最后一个 epoch
-        if hasattr(self, 'scheduler'):
-            if isinstance(self.scheduler, dict):
-                for _, scheduler in self.scheduler.items():
-                    scheduler.last_epoch = start_epoch - 1
-            else:
-                self.scheduler.last_epoch = start_epoch - 1
-                
-        return start_epoch
+    def resume(self, ckpt):
+        """从checkpoint恢复训练"""
+        raise NotImplementedError  # 需要子类实现具体的恢复逻辑
 
     def preprocess_batch(self, batch):
         """预处理输入批次"""

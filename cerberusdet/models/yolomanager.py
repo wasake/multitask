@@ -15,7 +15,6 @@ class YOLOManager:
         """
         self.pt_path = pt_path
         self.device = 0 if torch.cuda.is_available() else "cpu"
-        self.optimizer_state = None  # 存储优化器状态
     
     def load_model(self, themodel=None) -> YOLO:
         """
@@ -38,8 +37,7 @@ class YOLOManager:
               imgsz: int = 640, 
               project: str = "runs/train", 
               name: str = "exp", 
-              exist_ok: bool = False,
-              resume_optimizer: bool = False):  # 新增参数用于恢复优化器状态
+              exist_ok: bool = False):
         """
         训练模型：加载 .pt 文件，执行训练，训练后更新 .pt 文件。
         
@@ -52,10 +50,6 @@ class YOLOManager:
             project (str): 保存目录
             name (str): 实验名称
             exist_ok (bool): 是否覆盖现有目录
-            resume_optimizer (bool): 是否恢复优化器状态
-        
-        返回:
-            tuple: (新模型路径，优化器状态)
         """
         # 模拟命令行参数
         opt = {}
@@ -71,28 +65,11 @@ class YOLOManager:
         opt["name"] = name
         opt["exist-ok"] = exist_ok
         opt["device"] = self.device
-        
-        # 添加优化器状态
-        if resume_optimizer and self.optimizer_state:
-            opt["optimizer_state"] = self.optimizer_state
-        
-        print(f"训练设备: {self.device}, 恢复优化器: {resume_optimizer}")
+        print(self.device)
 
-        try:
-            # 尝试使用run_with_optimizer_state函数（如果可用）
-            from cerberusdet.train import run_with_optimizer_state
-            new_pt_path, new_optimizer_state = run_with_optimizer_state(opt)
-            self.pt_path = new_pt_path  # 更新当前 .pt 文件路径
-            self.optimizer_state = new_optimizer_state  # 保存优化器状态
-            print(f"训练完成。模型已保存至 {self.pt_path}，优化器状态已更新")
-            return new_pt_path, new_optimizer_state
-        except (ImportError, AttributeError):
-            # 如果run_with_optimizer_state不可用，则使用标准run函数
-            from cerberusdet.train import run
-            new_pt_path = run(opt)
-            self.pt_path = new_pt_path  # 更新当前 .pt 文件路径
-            print(f"训练完成。模型已保存至 {self.pt_path}（未保存优化器状态）")
-            return new_pt_path, None
+        new_pt_path = run(opt)
+        self.pt_path = new_pt_path  # 更新当前 .pt 文件路径
+        print(f"Training completed. Updated model saved to {self.pt_path}")
     
     def get_parameters(self, part: str = "all", themodel=None) -> dict:
         """

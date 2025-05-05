@@ -2,8 +2,6 @@ import torch
 from ultralytics import YOLO
 import os
 import shutil
-import sys
-sys.path.append('/home/jpf/Desktop/multitask')  # 添加项目根目录到路径
 from cerberusdet.models.yolomanager import YOLOManager  # 假设 yolomanager.py 在此路径
 
 class NetworkEndpoint():
@@ -24,11 +22,8 @@ class NetworkEndpoint():
         self.prg = project
         self.device = device if torch.cuda.is_available() else "cpu"
         self.yolo_manager = YOLOManager(pt_path, device)
-        # 记录上一次的训练轮次，用于确定是否需要恢复优化器状态
-        self.last_trained = False
 
-    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
-              project: str = None, name: str = "exp", exist_ok: bool = False):
+    def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, project: str = "runs/train", name: str = "exp", exist_ok: bool = False):
         """
         训练模型。
         
@@ -39,36 +34,19 @@ class NetworkEndpoint():
             project (str): 保存目录
             name (str): 实验名称
             exist_ok (bool): 是否覆盖现有目录
-        
-        返回:
-            tuple: (新的模型路径, 优化器状态)
         """
-        if project is None:
-            project = self.prg
-            
-        # 确定是否恢复优化器状态
-        resume_optimizer = self.last_trained
-        
-        # 训练模型并获取新的模型路径和优化器状态
-        new_pt_path, optimizer_state = self.yolo_manager.train(
+        self.yolo_manager.train(
             data_yaml=self.data_yaml,
             hyp=self.hyp,
             cfg=self.cfg,
             epochs=epochs,
             batch_size=batch_size,
             imgsz=imgsz,
-            project=project,
+            project=self.prg,
             name=name,
-            exist_ok=exist_ok,
-            resume_optimizer=resume_optimizer
+            exist_ok=exist_ok
         )
-        
-        # 更新模型路径
-        self.pt_path = new_pt_path
-        # 标记已经训练过
-        self.last_trained = True
-        
-        return new_pt_path, optimizer_state
+        self.pt_path = self.yolo_manager.pt_path  # 更新 .pt 文件路径
 
     def send_pt(self, dest_path: str):
         """
@@ -115,26 +93,22 @@ class FederationManager:
             server_trains (bool): 服务器是否训练自己的模型并参与聚合
         """
         if server_trains:
-            # 服务器训练模型并获取更新后的模型路径和优化器状态
-            server_pt_path, _ = self.server.train(epochs=1)
+            self.server.train()
+            server_pt_path = self.server.pt_path
         else:
             server_pt_path = None
 
-        # 聚合所有模型并获取更新后的 .pt 文件路径
+        # 聚合所有模型并获取更新后的 .pt 文件路径，但在内部已经实现该目标
         updated_pt_paths = self.server.aggregate(self.client_pt_paths, server_pt_path)
-        print(f"聚合完成，更新了 {len(updated_pt_paths)} 个客户端模型")
 
         # 分发聚合后的模型给对应的客户端
-        for i, client in enumerate(self.clients):
-            # 确保客户端接收到聚合后的模型参数
-            client.receive_pt(updated_pt_paths[i])
-            print(f"客户端 {i+1} 已接收聚合后的模型参数")
-            
-        return updated_pt_paths  # 返回更新后的模型路径
+        # for i in range(len(self.clients)):
+        #     self.clients[i].receive_pt(updated_pt_paths[i])
+        #     print("检测通过")
 
 class Server(NetworkEndpoint):
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
-              project: str = "/home/jpf/Desktop/multitask/tempruns/serverruns/train", name: str = "server", 
+              project: str = "/root/autodl-tmp/serverruns/train", name: str = "server", 
               exist_ok: bool = False):
         super().train(epochs, batch_size, imgsz, project, name, exist_ok)
 
@@ -156,7 +130,7 @@ class Server(NetworkEndpoint):
         ]
 
         # 如果服务器参与训练，加载其 backbone 参数
-        if (server_pt_path):
+        if server_pt_path:
             server_backbone = self.yolo_manager.get_parameters(part="backbone", themodel=server_pt_path)
             all_backbones = client_backbones + [server_backbone]
         else:
@@ -185,7 +159,7 @@ class Server(NetworkEndpoint):
 
 class Client(NetworkEndpoint):
     def train(self, epochs: int = 1, batch_size: int = 16, imgsz: int = 640, 
-              project: str = "/home/jpf/Desktop/multitask/tempruns/clientruns/train", name: str = "client", 
+              project: str = "/root/autodl-fs/clientruns/train", name: str = "client", 
               exist_ok: bool = False):
         super().train(epochs, batch_size, imgsz, project, name, exist_ok)
 
@@ -204,41 +178,41 @@ if __name__=="__main__":
 
     # 初始化服务器
     server = Server(
-        pt_path="/home/jpf/Desktop/multitask/pretrained/yolov8x_state_dict.pt",
-        data_yaml="/home/jpf/Desktop/multitask/data/voc_0.yaml",
-        hyp="/home/jpf/Desktop/multitask/data/hyps/hyp.cerber-voc_obj365.yaml",
-        project="/home/jpf/Desktop/multitask/tempruns/serverruns",
-        cfg="/home/jpf/Desktop/multitask/cerberusdet/models/yolov8x.yaml",
+        pt_path="pretrained/yolov8x_state_dict.pt",
+        data_yaml="data/vd1.yaml",
+        hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
+        project="/root/autodl-fs/serverruns/train",
+        cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
     
-    # 初始化客户端 
+    # 初始化客户端
     client1 = Client(
-        pt_path="/home/jpf/Desktop/multitask/pretrained/yolov8x_state_dict.pt",
-        data_yaml="/home/jpf/Desktop/multitask/data/voc_1.yaml",
-        project="/home/jpf/Desktop/multitask/tempruns/client1runswithserver",
-        hyp="/home/jpf/Desktop/multitask/data/hyps/hyp.cerber-voc_obj365.yaml",
-        cfg="/home/jpf/Desktop/multitask/cerberusdet/models/yolov8x.yaml",
+        pt_path="pretrained/yolov8x_state_dict.pt",
+        data_yaml="data/UAV0.yaml",
+        project="/root/autodl-fs/client1runswithserver/train",
+        hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
+        cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
 
     # 初始化客户端
     client2 = Client(
-        pt_path="/home/jpf/Desktop/multitask/pretrained/yolov8x_state_dict.pt",
-        data_yaml="/home/jpf/Desktop/multitask/data/voc_2.yaml",
-        project="/home/jpf/Desktop/multitask/tempruns/client2runswithserver",
-        hyp="/home/jpf/Desktop/multitask/data/hyps/hyp.cerber-voc_obj365.yaml",
-        cfg="/home/jpf/Desktop/multitask/cerberusdet/models/yolov8x.yaml",
+        pt_path="pretrained/yolov8x_state_dict.pt",
+        data_yaml="data/UAV1.yaml",
+        project="/root/autodl-fs/client2runswithserver/train",
+        hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
+        cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
 
     # 初始化客户端
     client3 = Client(
-        pt_path="/home/jpf/Desktop/multitask/pretrained/yolov8x_state_dict.pt",
-        data_yaml="/home/jpf/Desktop/multitask/data/voc_3.yaml",
-        project="/home/jpf/Desktop/multitask/tempruns/client3runswithserver",
-        hyp="/home/jpf/Desktop/multitask/data/hyps/hyp.cerber-voc_obj365.yaml",
-        cfg="/home/jpf/Desktop/multitask/cerberusdet/models/yolov8x.yaml",
+        pt_path="pretrained/yolov8x_state_dict.pt",
+        data_yaml="data/UAV2.yaml",
+        project="/root/autodl-fs/client3runswithserver/train",
+        hyp="data/hyps/hyp.cerber-voc_obj365.yaml",
+        cfg="cerberusdet/models/yolov8x.yaml",
         device="0"
     )
 
@@ -246,7 +220,7 @@ if __name__=="__main__":
     manager = FederationManager(server, [client1, client2, client3])
 
     # 模拟多轮训练和聚合
-    for round in range(5):  # 进行 5 轮
+    for round in range(50):  # 进行 5 轮
         print(f"Round {round + 1}")
         # 清空上一轮的模型路径
         manager.client_pt_paths = []
@@ -259,8 +233,12 @@ if __name__=="__main__":
         # 服务器聚合并分发
         # manager.aggregate_and_distribute(server_trains=True)  # 服务器参与训练
         # 或者使用 
-        manager.aggregate_and_distribute(server_trains=True)  # 服务器不训练 
+        manager.aggregate_and_distribute(server_trains=False)  # 服务器不训练 
 
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
+        print(f"Round {round + 1} clear")
         print(f"Round {round + 1} clear")
 
     # mlruns占用大量内存，暂时不用这部分，将其删除 
